@@ -1,0 +1,1 @@
+La documentación está realizada con chatgpt, así que asumió que debía ir en inglés XD

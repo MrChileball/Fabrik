@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+
+:global(html) {
+	background-color: var(--color-background);
+	color: var(--color-foreground);
+}
+
+:global(body) {
+	background-color: var(--color-background);
+	color: var(--color-foreground);
+}

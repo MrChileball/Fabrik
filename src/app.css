@@ -1,0 +1,87 @@
+@import 'tailwindcss';
+
+@theme {
+	--color-background: #0f1117;
+	--color-surface: #161b24;
+	--color-surface-muted: #1f2532;
+	--color-border: #272f3d;
+	--color-foreground: #f5f6f8;
+	--color-muted: #9aa3b5;
+	--color-accent: #ff6f00;
+	--color-accent-strong: #ff881a;
+	--color-accent-soft: #ffb169;
+	--color-accent-contrast: #0b0f16;
+	--color-success: #39d98a;
+	--color-danger: #ff5f56;
+	--shadow-elevated: 0 24px 60px -28px rgba(0, 0, 0, 0.85);
+}
+
+@layer base {
+	:root {
+		color-scheme: dark;
+	}
+
+	body {
+		@apply min-h-screen bg-background text-foreground antialiased;
+		background-image: radial-gradient(circle at top left, rgba(255, 111, 0, 0.25), transparent 48%),
+			radial-gradient(circle at bottom right, rgba(255, 136, 26, 0.17), transparent 52%);
+		background-attachment: fixed;
+		background-color: var(--color-background);
+	}
+
+	a {
+		@apply text-accent transition-colors;
+	}
+
+	a:hover {
+		@apply text-accent-strong;
+	}
+
+	button,
+	input,
+	textarea,
+	select {
+		@apply rounded-lg border border-border/70 bg-surface text-foreground transition-colors duration-150 ease-out;
+	}
+
+	button {
+		@apply cursor-pointer px-3 py-2 font-medium hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-accent-strong focus-visible:outline-offset-2;
+	}
+
+	input,
+	textarea,
+	select {
+		@apply px-3 py-2 text-sm text-foreground placeholder:text-muted/70 hover:border-accent focus:border-accent focus:outline-none;
+	}
+
+	svg {
+		@apply text-muted transition-colors duration-150 ease-out;
+	}
+
+	svg:hover {
+		@apply text-accent;
+	}
+
+	summary {
+		@apply cursor-pointer text-muted transition-colors hover:text-accent;
+	}
+
+	::placeholder {
+		color: var(--color-muted);
+	}
+
+	::selection {
+		background-color: color-mix(in srgb, var(--color-accent) 70%, transparent);
+		color: var(--color-accent-contrast);
+	}
+}
+
+@layer components {
+	.card-surface {
+		@apply rounded-xl border border-border bg-surface/95 shadow-[--shadow-elevated] backdrop-blur-sm transition-colors duration-200 hover:border-accent/40;
+	}
+
+	.tag-muted {
+		@apply inline-flex items-center gap-2 rounded-full border border-border/80 bg-surface-muted px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-muted transition-colors duration-150 hover:border-accent hover:text-accent;
+	}
+}
