@@ -4,11 +4,6 @@
       "id": "6600b8a3-c5da-4f99-80ae-5c20e9bcb55d",
       "name": "Nodo principal",
       "createdAt": 1763941972041
-    },
-    {
-      "id": "1d71179f-80a9-42dc-bef3-f907d97e35f1",
-      "name": "Nashe",
-      "createdAt": 1763942010668
     }
   ],
   "printers": [
@@ -18,13 +13,6 @@
       "baseUrl": "http://192.168.1.17",
       "nodeId": "6600b8a3-c5da-4f99-80ae-5c20e9bcb55d",
       "createdAt": 1763941972041
-    },
-    {
-      "id": "cbf07029-cebb-43b0-91e6-a81d196a3664",
-      "name": "goty",
-      "baseUrl": "http://192.168.1.17",
-      "nodeId": "1d71179f-80a9-42dc-bef3-f907d97e35f1",
-      "createdAt": 1763942010668
     }
   ],
   "states": {
@@ -33,17 +21,9 @@
       "variant": "idle",
       "progress": 0,
       "error": null,
-      "updatedAt": 1763943086556,
-      "message": ""
-    },
-    "cbf07029-cebb-43b0-91e6-a81d196a3664": {
-      "label": "Standby",
-      "variant": "idle",
-      "progress": 0,
-      "error": null,
-      "updatedAt": 1763943086572,
+      "updatedAt": 1763943506536,
       "message": ""
     }
   },
-  "updatedAt": 1763943088285
+  "updatedAt": 1763943508281
 }

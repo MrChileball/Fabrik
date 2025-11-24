@@ -1,6 +1,12 @@
 node_modules
-.github
-github
+.git/
+.svelte-kit/
+
+data/
+docs/
+.npmrc
+/.github
+
 
 # Output
 .output
