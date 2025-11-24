@@ -1,13 +1,10 @@
 node_modules
-.git/
-.svelte-kit/
-
 data/
 docs/
-.npmrc
-/.github
-
-
+github
+.github
+/data/printer-store.json
+/data
 # Output
 .output
 .vercel
