@@ -17,13 +17,13 @@
   ],
   "states": {
     "68699ecb-8c07-4d08-94d5-756f99294981": {
-      "label": "Standby",
-      "variant": "idle",
+      "label": "Error",
+      "variant": "error",
       "progress": 0,
-      "error": null,
+      "error": "Moonraker request failed: fetch failed",
       "updatedAt": 1763944673257,
-      "message": ""
+      "message": null
     }
   },
-  "updatedAt": 1763944674063
+  "updatedAt": 1776712898834
 }
