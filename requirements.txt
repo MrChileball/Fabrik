@@ -19,7 +19,7 @@ pydantic-settings==2.1.0
 # Authentication
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-PyJWT==2.8.1
+PyJWT==2.8.0
 
 # HTTP Client (async)
 httpx==0.25.2
