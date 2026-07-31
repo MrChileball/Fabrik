@@ -1,55 +1,74 @@
-# PrintRobot Database Schema
+# Esquema mínimo de datos de Fabrik
 
-**Base de datos:** SQLite (archivo: `data/fabrik.db`)
+**Base de datos:** SQLite
 
-**Propósito:** Esquema de bases de datos para sistema de orquestación de granjas de impresoras 3D con Klipper/Moonraker.
+**Propósito:** guardar metadatos de la granja, trabajos, consumo y auditoría sin persistir GCODE a largo plazo.
 
----
+## Principios
 
-## Diagrama ER (Entity-Relationship)
+- El backend recibe el archivo solo de forma temporal para subirlo a Moonraker.
+- Cuando Moonraker confirma la recepción, el binario se elimina.
+- La auditoría conserva el evento del trabajo, no el archivo.
+- El consumo de horas y filamento se calcula a partir de los trabajos completados.
+- La cola prioriza compatibilidad de grupo y luego antigüedad del trabajo.
+- El estado operativo de un job y su historial de eventos se guardan por separado.
+- La impresora se identifica por su endpoint de Moonraker, no solo por un nombre interno.
+- La capa de persistencia debe poderoras y filamento se calcula a partir de los trabajos completados.
+- La cola prioriza compatibilidad de grupo y luego antigüedad del trabajo.
+- El estado operativo de un job y su historial de eventos se guardan por separado.
+- La impresora se identifica por su endpoint de Moonraker, no solo por un nombre interno.
+- La capa de persistencia debe poder migrar de SQLite a MySQL/MariaDB sin cambiar el dominio.
+
+## Diagrama ER
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#1e293b', 'primaryBorderColor': '#64748b', 'lineColor': '#94a3b8', 'secondBgColor': '#0f172a', 'tertiaryColor': '#1e293b'}}}%%
 erDiagram
     ROLES ||--o{ USERS : have
-    USERS ||--o{ QUEUE_JOBS : submits
-    USERS ||--o{ USER_CONSUMO : tracks
-    USERS ||--o{ AUDIT_LOG : performs
+    PRINTER_GROUPS ||--o{ PRINTERS : groups
     NODES ||--o{ PRINTERS : contains
-    PRINTERS ||--o{ QUEUE_JOBS : assigned_to
-    QUEUE_JOBS ||--o{ AUDIT_LOG : logged_in
+    PRINTER_GROUPS ||--o{ PRINT_JOBS : receives
+    USERS ||--o{ PRINT_JOBS : submits
+    PRINTERS ||--o{ PRINT_JOBS : executes
+    PRINT_JOBS ||--o{ PRINT_JOB_EVENTS : records
+    USERS ||--o{ AUDIT_LOG : performs
 
     ROLES {
-        int id PK "Primary Key"
-        string name UK "admin, profesor, estudiante, invitado"
+        int id PK
+        string name UK
         text description
-        int filament_quota_grams "Límite de filamento por mes"
-        int hours_quota "Límite de horas por mes"
+        int filament_quota_grams
+        int hours_quota
         timestamp created_at
     }
 
     USERS {
         int id PK
-        string username UK "Único"
+        string username UK
         string password_hash
         string email UK
-        int role_id FK "→ roles.id"
+        int role_id FK
         string full_name
-        decimal filament_used_month "Acumulado mes actual"
-        decimal hours_used_month "Horas acumuladas mes"
         boolean is_active
         timestamp last_login
         timestamp created_at
     }
 
+    PRINTER_GROUPS {
+        int id PK
+        string name UK
+        text description
+        text compatibility_profile_json
+        int priority
+        boolean is_active
+        timestamp created_at
+    }
+
     NODES {
         int id PK
-        string name "Nombre nodo (e.g., Nodo-Lab-01)"
-        string ip_address UK "IP Klipper"
-        int port "Puerto API (default 7125)"
-        string api_key "Token Moonraker"
-        string hostname "Ej. klipper.local"
-        boolean is_online "Estado conectividad"
+        string name UK
+        string moonraker_url UK
+        string api_key
+        boolean is_online
         timestamp last_seen
         text notes
         timestamp created_at
@@ -57,239 +76,182 @@ erDiagram
 
     PRINTERS {
         int id PK
-        string name "Nombre impresora"
-        int node_id FK "→ nodes.id"
-        string model "Modelo (e.g., Kossel, Ender3)"
+        int node_id FK
+        int group_id FK
+        string name
+        string model
         string serial_number UK
+        string printer_type
+        string endpoint_url UK
         boolean is_active
-        decimal filament_loaded_grams
-        string printer_type "cartuche, delta, fdm"
         timestamp created_at
     }
 
-    QUEUE_JOBS {
+    PRINT_JOBS {
         int id PK
-        int user_id FK "→ users.id"
-        int printer_id FK "→ printers.id"
-        string filename "archivo.gcode"
-        string status "pending, printing, paused, completed, failed"
+        int user_id FK
+        int group_id FK
+        int printer_id FK
+        string original_filename
+        string remote_filename
+        string status
         decimal estimated_filament_grams
         int estimated_time_seconds
         decimal actual_filament_grams
         int actual_time_seconds
-        decimal progress_percent
-        text error_message
+        string upload_state
+        string source_checksum
+        timestamp uploaded_at
         timestamp started_at
         timestamp completed_at
         timestamp created_at
     }
 
-    USER_CONSUMO {
+    PRINT_JOB_EVENTS {
         int id PK
-        int user_id FK "→ users.id (unique per month)"
-        int year_month "YYYYMM format"
-        decimal total_filament_grams
-        int total_hours
-        int jobs_completed
-        timestamp calculated_at
+        int job_id FK
+        string event_type
+        string event_state
+        text details_json
+        timestamp created_at
     }
 
     AUDIT_LOG {
         int id PK
-        int user_id FK "→ users.id"
-        string action "login, print_start, print_stop, quota_exceeded"
-        string resource_type "user, printer, node, job"
+        int user_id FK
+        string action
+        string resource_type
         int resource_id
-        text details "JSON con detalles"
-        string ip_address
+        text details_json
         timestamp created_at
     }
 ```
 
----
+## Tablas
 
-## Tablas Detalladas
+### 1. `roles`
+Define permisos y cuotas base por tipo de usuario.
 
-### 1. **ROLES**
-Control de acceso basado en roles. Define permisos y cuotas.
+- `id` INTEGER, PK
+- `name` TEXT, único, por ejemplo `admin`, `profesor`, `estudiante`, `invitado`
+- `description` TEXT
+- `filament_quota_grams` INTEGER
+- `hours_quota` INTEGER
+- `created_at` TIMESTAMP
 
-| Campo | Tipo | Restricciones | Descripción |
-|-------|------|---------------|-------------|
-| `id` | INTEGER | PK | Identificador único |
-| `name` | VARCHAR(50) | UQ | `admin`, `profesor`, `estudiante`, `invitado` |
-| `description` | TEXT | | Descripción del rol |
-| `filament_quota_grams` | INTEGER | | Límite mensual de filamento (gramos) |
-| `hours_quota` | INTEGER | | Límite mensual de horas |
-| `created_at` | TIMESTAMP | DEFAULT NOW | Fecha de creación |
+### 2. `users`
+Registro de usuarios.
 
-**Valores iniciales:**
-```
-- admin: sin límites
-- profesor: 5000g/mes, 100h/mes
-- estudiante: 2000g/mes, 50h/mes
-- invitado: 500g/mes, 10h/mes
-```
+- `id` INTEGER, PK
+- `username` TEXT, único
+- `password_hash` TEXT
+- `email` TEXT, único
+- `role_id` INTEGER, FK a `roles.id`
+- `full_name` TEXT
+- `is_active` BOOLEAN
+- `last_login` TIMESTAMP
+- `created_at` TIMESTAMP
 
----
+### 3. `printer_groups`
+Agrupa impresoras por specs compatibles.
 
-### 2. **USERS**
-Registro de usuarios del sistema.
+- `id` INTEGER, PK
+- `name` TEXT, único
+- `description` TEXT
+- `compatibility_profile_json` TEXT con reglas o specs del grupo
+- `priority` INTEGER
+- `is_active` BOOLEAN
+- `created_at` TIMESTAMP
 
-| Campo | Tipo | Restricciones | Descripción |
-|-------|------|---------------|-------------|
-| `id` | INTEGER | PK | Identificador único |
-| `username` | VARCHAR(50) | UQ, NOT NULL | Login único |
-| `password_hash` | VARCHAR(255) | NOT NULL | Hash bcrypt (nunca texto plano) |
-| `email` | VARCHAR(100) | UQ | Email de contacto |
-| `role_id` | INTEGER | FK→roles.id | Rol del usuario |
-| `full_name` | VARCHAR(100) | | Nombre completo |
-| `filament_used_month` | DECIMAL(10,2) | DEFAULT 0 | Consumo acumulado (mes actual) |
-| `hours_used_month` | DECIMAL(10,2) | DEFAULT 0 | Horas acumuladas (mes actual) |
-| `is_active` | BOOLEAN | DEFAULT TRUE | Cuenta activa/desactivada |
-| `last_login` | TIMESTAMP | | Último acceso |
-| `created_at` | TIMESTAMP | DEFAULT NOW | Fecha de creación |
+### 4. `nodes`
+Nodos con Moonraker/Klipper.
 
----
+- `id` INTEGER, PK
+- `name` TEXT, único
+- `moonraker_url` TEXT, único, base del nodo
+- `api_key` TEXT
+- `is_online` BOOLEAN
+- `last_seen` TIMESTAMP
+- `notes` TEXT
+- `created_at` TIMESTAMP
 
-### 3. **NODES**
-Hosts Klipper con API Moonraker.
+### 5. `printers`
+Impresoras registradas dentro de un nodo y un grupo.
 
-| Campo | Tipo | Restricciones | Descripción |
-|-------|------|---------------|-------------|
-| `id` | INTEGER | PK | Identificador único |
-| `name` | VARCHAR(100) | NOT NULL | Nombre descriptivo (ej. `Nodo-Lab-01`) |
-| `ip_address` | VARCHAR(15) | UQ, NOT NULL | Dirección IP o hostname |
-| `port` | INTEGER | DEFAULT 7125 | Puerto API Moonraker |
-| `api_key` | VARCHAR(255) | | Token de autenticación (opcional para MVP) |
-| `hostname` | VARCHAR(100) | | Hostname DNS (ej. `klipper.local`) |
-| `is_online` | BOOLEAN | DEFAULT FALSE | Estado conectividad (polling) |
-| `last_seen` | TIMESTAMP | | Último latido recibido |
-| `notes` | TEXT | | Notas administrativas |
-| `created_at` | TIMESTAMP | DEFAULT NOW | Fecha de creación |
+- `id` INTEGER, PK
+- `node_id` INTEGER, FK a `nodes.id`
+- `group_id` INTEGER, FK a `printer_groups.id`
+- `name` TEXT
+- `model` TEXT
+- `serial_number` TEXT, único cuando exista
+- `printer_type` TEXT
+- `endpoint_url` TEXT, único, endpoint real de Moonraker para esa impresora
+- `is_active` BOOLEAN
+- `created_at` TIMESTAMP
 
----
+### 6. `print_jobs`
+Historial y estado de cada impresión.
 
-### 4. **PRINTERS**
-Impresoras 3D registradas en nodos.
+- `id` INTEGER, PK
+- `user_id` INTEGER, FK a `users.id`
+- `group_id` INTEGER, FK a `printer_groups.id`
+- `printer_id` INTEGER, FK a `printers.id`, nullable mientras está en cola
+- `original_filename` TEXT
+- `remote_filename` TEXT
+- `status` TEXT: `pending`, `uploading`, `queued`, `printing`, `completed`, `failed`, `cancelled`
+- `estimated_filament_grams` REAL
+- `estimated_time_seconds` INTEGER
+- `actual_filament_grams` REAL
+- `actual_time_seconds` INTEGER
+- `upload_state` TEXT: `temporary`, `uploaded`, `deleted`
+- `source_checksum` TEXT
+- `uploaded_at` TIMESTAMP
+- `started_at` TIMESTAMP
+- `completed_at` TIMESTAMP
+- `created_at` TIMESTAMP
 
-| Campo | Tipo | Restricciones | Descripción |
-|-------|------|---------------|-------------|
-| `id` | INTEGER | PK | Identificador único |
-| `name` | VARCHAR(100) | NOT NULL | Nombre impresora (ej. `Kossel-01`) |
-| `node_id` | INTEGER | FK→nodes.id | Nodo que contiene esta impresora |
-| `model` | VARCHAR(50) | | Modelo (ej. `Kossel`, `Ender3 V2`) |
-| `serial_number` | VARCHAR(50) | UQ | Serial (si disponible) |
-| `is_active` | BOOLEAN | DEFAULT TRUE | Disponible para usar |
-| `filament_loaded_grams` | DECIMAL(10,2) | DEFAULT 0 | Filamento cargado actual |
-| `printer_type` | VARCHAR(20) | | `cartuche`, `delta`, `fdm`, etc. |
-| `created_at` | TIMESTAMP | DEFAULT NOW | Fecha de creación |
+### 7. `print_job_events`
+Historial append-only de cambios de estado y eventos operativos del job.
 
----
+- `id` INTEGER, PK
+- `job_id` INTEGER, FK a `print_jobs.id`
+- `event_type` TEXT, por ejemplo `created`, `uploaded`, `assigned`, `started`, `paused`, `resumed`, `completed`, `failed`, `cancelled`
+- `event_state` TEXT, estado operativo asociado al evento
+- `details_json` TEXT
+- `created_at` TIMESTAMP
 
-### 5. **QUEUE_JOBS**
-Cola de trabajos de impresión.
+### 8. `audit_log`
+Eventos de trazabilidad.
 
-| Campo | Tipo | Restricciones | Descripción |
-|-------|------|---------------|-------------|
-| `id` | INTEGER | PK | Identificador único |
-| `user_id` | INTEGER | FK→users.id | Usuario que envió el trabajo |
-| `printer_id` | INTEGER | FK→printers.id | Impresora asignada |
-| `filename` | VARCHAR(255) | NOT NULL | Nombre archivo GCODE |
-| `status` | VARCHAR(20) | DEFAULT `pending` | Estados: `pending`, `printing`, `paused`, `completed`, `failed` |
-| `estimated_filament_grams` | DECIMAL(10,2) | | Predicción filamento |
-| `estimated_time_seconds` | INTEGER | | Tiempo estimado (segundos) |
-| `actual_filament_grams` | DECIMAL(10,2) | | Filamento utilizado (final) |
-| `actual_time_seconds` | INTEGER | | Tiempo real (segundos) |
-| `progress_percent` | DECIMAL(5,2) | DEFAULT 0 | Progreso (0-100%) |
-| `error_message` | TEXT | | Detalle de error (si aplica) |
-| `started_at` | TIMESTAMP | | Cuándo comenzó la impresión |
-| `completed_at` | TIMESTAMP | | Cuándo finalizó |
-| `created_at` | TIMESTAMP | DEFAULT NOW | Cuando se envió |
+- `id` INTEGER, PK
+- `user_id` INTEGER, FK a `users.id`
+- `action` TEXT
+- `resource_type` TEXT
+- `resource_id` INTEGER
+- `details_json` TEXT
+- `created_at` TIMESTAMP
 
----
-
-### 6. **USER_CONSUMO**
-Totales de consumo por usuario y mes (para auditoría y cuotas).
-
-| Campo | Tipo | Restricciones | Descripción |
-|-------|------|---------------|-------------|
-| `id` | INTEGER | PK | Identificador único |
-| `user_id` | INTEGER | FK→users.id | Usuario |
-| `year_month` | INTEGER | UQ(user_id) | Formato YYYYMM (ej. 202604) |
-| `total_filament_grams` | DECIMAL(10,2) | DEFAULT 0 | Total mes |
-| `total_hours` | DECIMAL(10,2) | DEFAULT 0 | Total horas |
-| `jobs_completed` | INTEGER | DEFAULT 0 | Cantidad trabajos exitosos |
-| `calculated_at` | TIMESTAMP | DEFAULT NOW | Cuando se calculó |
-
----
-
-### 7. **AUDIT_LOG**
-Registro de acciones para auditoría y diagnóstico.
-
-| Campo | Tipo | Restricciones | Descripción |
-|-------|------|---------------|-------------|
-| `id` | INTEGER | PK | Identificador único |
-| `user_id` | INTEGER | FK→users.id | Usuario que realizó la acción |
-| `action` | VARCHAR(50) | | `login`, `print_start`, `print_stop`, `quota_exceeded`, `node_offline` |
-| `resource_type` | VARCHAR(20) | | `user`, `printer`, `node`, `job` |
-| `resource_id` | INTEGER | | ID del recurso afectado |
-| `details` | TEXT | | JSON con datos adicionales |
-| `ip_address` | VARCHAR(15) | | IP origen (para seguridad) |
-| `created_at` | TIMESTAMP | DEFAULT NOW | Timestamp de la acción |
-
----
-
-## Índices Sugeridos
+## Índices sugeridos
 
 ```sql
--- Performance queries frecuentes
-CREATE INDEX idx_users_role_id ON users(role_id);
-CREATE INDEX idx_queue_jobs_user_id ON queue_jobs(user_id);
-CREATE INDEX idx_queue_jobs_printer_id ON queue_jobs(printer_id);
-CREATE INDEX idx_queue_jobs_status ON queue_jobs(status);
 CREATE INDEX idx_printers_node_id ON printers(node_id);
-CREATE INDEX idx_user_consumo_year_month ON user_consumo(year_month);
+CREATE INDEX idx_printers_group_id ON printers(group_id);
+CREATE INDEX idx_print_jobs_user_id ON print_jobs(user_id);
+CREATE INDEX idx_print_jobs_group_id ON print_jobs(group_id);
+CREATE INDEX idx_print_jobs_printer_id ON print_jobs(printer_id);
+CREATE INDEX idx_print_jobs_status ON print_jobs(status);
+CREATE INDEX idx_print_job_events_job_id ON print_job_events(job_id);
+CREATE INDEX idx_print_job_events_created_at ON print_job_events(created_at);
 CREATE INDEX idx_audit_log_user_id ON audit_log(user_id);
 CREATE INDEX idx_audit_log_created_at ON audit_log(created_at);
 ```
 
----
+## Notas de diseño
 
-## Notas de Implementación
-
-### Ciclo 0 (MVP)
-- ✅ Tablas roles, users (sin auth aún)
-- ✅ Tablas nodes, printers
-- ✅ Tabla queue_jobs (básica)
-- ⏳ Auditoría simple (sin audit_log)
-
-### Ciclo 1
-- ✅ Autenticación JWT completa
-- ✅ Cuotas y consumo integrado
-- ✅ Audit log completo
-- ✅ Sincronización automática de consumo
-
-### Ciclo 2+
-- Replicación de BD (SQLite → PostgreSQL si escala)
-- Versionado más granular (user_consumo por dia)
-- Eventos WebSocket para actualizaciones en vivo
-
----
-
-## Cambios Futuros (Fáciles de Tracear)
-
-Cualquier cambio se documenta antes aquí. Ejemplo:
-
-- **[To Do] Agregar campo `maintenance_notes` en PRINTERS**
-  - Razón: Rastrear mantenimiento preventivo
-  - Ciclo: 2
-  - Migración: ALTER TABLE printers ADD COLUMN maintenance_notes TEXT
-
-- **[Done] Agregar campo `webhook_url` en NODES**
-  - Realizado en Ciclo 0.3
-  - Migración: `alembic revision --autogenerate`
-
----
-
-**Última actualización:** 20 de abril de 2026  
-**Version:** 0.1.0 (Ciclo 0)
+- No hay tabla para guardar GCODE de forma permanente.
+- El consumo mensual puede calcularse desde `print_jobs` y materializarse más adelante si hace falta.
+- Si la operación crece, el primer cambio natural sería separar lecturas analíticas, no cambiar la lógica del scheduler.
+- `print_job_events` sirve para evitar que la tabla principal de jobs se vuelva un historial gigante.
+- Si se migra a MySQL/MariaDB, conviene mantener la misma estructura de tablas y solo cambiar el driver y la cadena de conexión.
+- Para evitar reescrituras, la capa de acceso a datos debería construirse con ORM + migraciones, no con SQL disperso en la app.
+- Recomendación mínima de dependencias de persistencia: `SQLAlchemy`, `Alembic` y un driver del motor elegido (`pymysql` o `mysqlclient`).

@@ -1,133 +1,58 @@
-# 🚀 PrintRobot - Setup Rápido 
+# Fabrik - Setup rápido
 
-## ¿Qué se ha preparado?
+Guía corta para levantar el proyecto en desarrollo con el enfoque actual: backend como control-plane único, subida temporal de archivos y cola por grupos de impresoras.
 
-✅ Estructura monorepo (backend FastAPI + frontend SvelteKit)  
-✅ Docker Compose para producción  
-✅ Script de desarrollo paralelo (sin Docker)  
-✅ SQLite como BD (simple, rápido)  
-✅ Archivos de configuración template  
+## 1. Requisitos
 
----
+- Python 3.11+
+- Node.js 20+
+- pnpm
+- Git
 
-## 🎯 Start Rápido (Desarrollo Nativo - 5 min)
+## 2. Preparar variables locales
 
-### 1. Configurar variables de entorno
 ```bash
 cp .env.example .env.local
-# Editar .env.local si necesario (normalmente OK por defecto)
 ```
 
-### 2. Hacer script ejecutable
+Revisa al menos estas variables:
+
+- `DATABASE_URL=sqlite:///./data/fabrik.db`
+- `JWT_SECRET=dev-key-change-this-in-production-min-32-chars`
+- `MOONRAKER_TIMEOUT=10`
+- `VITE_API_URL=http://localhost:8000`
+
+## 3. Ejecutar desarrollo
+
 ```bash
 chmod +x scripts/dev.sh
-```
-
-### 3. Ejecutar desarrollo
-```bash
 ./scripts/dev.sh
 ```
 
-**Listo!** Accede a:
-- **Frontend:** http://localhost:5173
-- **Backend Docs:** http://localhost:8000/docs
+Esto debería levantar:
 
----
+- Frontend en http://localhost:5173
+- Backend en http://localhost:8000
+- Health en http://localhost:8000/health
 
-## 🐳 Producción con Docker (RPi4 u otro)
+## 4. Alternativa con Docker
 
-### 1. Build images
+Si prefieres contenedores:
+
 ```bash
-docker-compose build
+docker-compose up --build
 ```
 
-### 2. Crear .env.production (MUY IMPORTANTE)
-```bash
-cp .env.production.example .env.production
-# Editar: cambiar JWT_SECRET a algo random + URLs de prod
-nano .env.production
-```
+## 5. Qué esperar hoy
 
-### 3. Iniciar servicios
-```bash
-docker-compose up -d
-docker-compose logs -f backend  # Ver logs
-```
+- El backend todavía es mínimo.
+- La documentación define el contrato objetivo.
+- El backend será quien hable con Moonraker, no el frontend.
+- El GCODE vivirá solo el tiempo necesario para subirlo y luego se borrará.
 
-**Acceso:**
-- http://localhost (todo reversado vía nginx)
-- http://localhost/api/docs (API Swagger)
+## 6. Troubleshooting básico
 
----
-
-## 📁 Estructura Creada
-
-```
-fabrik/
-├── backend/                    # FastAPI app (nuevo)
-│   ├── app/
-│   │   ├── __init__.py
-│   │   └── main.py            # Entry point FastAPI
-│   ├── alembic/               # DB migrations
-│   └── venv/                  # Python venv (después de run)
-├── src/                        # SvelteKit frontend (existente)
-├── scripts/
-│   └── dev.sh                 # Script paralelo dev
-├── docker-compose.yml         # Orquestar servicios
-├── Dockerfile                 # Build SvelteKit
-├── Dockerfile.backend         # Build FastAPI
-├── nginx.conf                 # Reverse proxy
-├── .env.example               # Template vars
-├── .env.production.example    # Production reference
-├── requirements.txt           # Python deps
-└── .dockerignore              # Docker excludes
-```
-
----
-
-## ⚙️ Próximos Pasos (Ciclo 0)
-
-### Hoy
-- [ ] Correr `./scripts/dev.sh` y verificar que ambos servicios levanten
-- [ ] Acceder a http://localhost:5173 (debe cargar frontend)
-- [ ] Acceder a http://localhost:8000/docs (Swagger debe estar up)
-
-### Mañana (Backend PoC)
-- [ ] Crear primeros modelos SQLAlchemy: `User`, `Role` (en `backend/app/models.py`)
-- [ ] Generar primer migrations: `cd backend && alembic revision --autogenerate -m "initial schema"`
-- [ ] Conectar a Moonraker: crear `backend/app/services/moonraker_client.py`
-- [ ] Test: leer estado de 1 impresora real desde backend
-
-### Testing Docker en RPi4
-- [ ] Copiar repo a RPi4
-- [ ] Editar `.env.production`
-- [ ] Correr `docker-compose build && docker-compose up -d`
-- [ ] Verificar servicios: `docker-compose ps`
-
----
-
-## 🛠️ Troubleshooting
-
-| Problema | Solución |
-|----------|----------|
-| `Permission denied: ./scripts/dev.sh` | `chmod +x scripts/dev.sh` |
-| `ModuleNotFoundError: No module named 'backend'` | Backend debe correr desde raíz (`cd fabrik`) |
-| `Port 8000 already in use` | `lsof -i :8000` | `kill -9 <PID>` |
-| `Port 5173 already in use` | `lsof -i :5173` | `kill -9 <PID>` |
-| `SQLite: database is locked` | Cerrar todos procesos backend |
-| Docker build download fails en RPi | Problema de red; reintentar o usar `docker pull` |
-
----
-
-## 📚 Documentación Completa
-
-Ver [docs/new-plan/plan.md](docs/new-plan/plan.md) para:
-- Arquitectura detallada
-- Especificación de API endpoints
-- Modelos de BD (SQLite)
-- Git workflow + convenciones
-- Timeline de ciclos (Ciclo 0-4)
-
----
-
-**¡Proyecto listo para Ciclo 0!** 🎉
+- `Permission denied: ./scripts/dev.sh` -> ejecuta `chmod +x scripts/dev.sh`.
+- `Port 8000 already in use` -> libera el puerto o cambia la configuración local.
+- `SQLite: database is locked` -> cierra procesos backend duplicados.
+- `CORS error` -> revisa `CORS_ORIGINS` y `VITE_API_URL`.
